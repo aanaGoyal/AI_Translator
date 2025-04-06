@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>AI Translator</title>
+  <style>
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0f0f0f, #1a1a1a);
+      color: #aefeff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    .side-glow {
+      position: absolute;
+      top: 0;
+      width: 80px;
+      height: 100%;
+      background: radial-gradient(circle, rgba(0, 255, 255, 0.2), transparent 70%);
+      z-index: 0;
+    }
+
+    .left-glow {
+      left: 0;
+    }
+
+    .right-glow {
+      right: 0;
+    }
+
+    .main-container {
+      display: flex;
+      gap: 40px;
+      z-index: 1;
+    }
+
+    h1 {
+      color: #00f7ff;
+      text-align: center;
+      margin-bottom: 25px;
+      text-shadow: 0 0 10px rgba(0, 247, 255, 0.5);
+    }
+
+    .form-section,
+    .output-section {
+      background-color: #1c1c1c;
+      padding: 25px 30px;
+      border-radius: 15px;
+      width: 450px;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+    }
+
+    label {
+      display: block;
+      margin-top: 15px;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+
+    textarea,
+    select,
+    input[type="submit"] {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      border-radius: 10px;
+      border: none;
+      background-color: #2a2a2a;
+      color: #aefeff;
+      font-size: 16px;
+    }
+
+    textarea {
+      resize: none;
+      height: 100px;
+    }
+
+    input[type="submit"] {
+      margin-top: 20px;
+      background-color: #00f7ff;
+      color: #000;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.2s;
+    }
+
+    input[type="submit"]:hover {
+      background-color: #00c2cc;
+      transform: scale(1.03);
+    }
+
+    .speak-btn,
+    .mic-button {
+      background-color: #00f7ff;
+      color: #000;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 10px;
+      transition: background 0.3s;
+    }
+
+    .speak-btn:hover,
+    .mic-button:hover {
+      background-color: #00c2cc;
+    }
+
+    .textarea-wrapper {
+      position: relative;
+    }
+
+    .mic-button {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      padding: 5px 10px;
+    }
+
+    .output-section h3 {
+      margin-bottom: 10px;
+    }
+
+    .output-section p {
+      font-size: 16px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="side-glow left-glow"></div>
+  <div class="side-glow right-glow"></div>
+
+  <div class="main-container">
+    <!-- Left Side: Input Form -->
+    <div class="form-section">
+      <h1>AI Translator....</h1>
+      <form method="POST">
+        <label for="text">Enter text:</label>
+        <div class="textarea-wrapper">
+          <textarea name="text" id="text" required>{{ original_text if original_text else '' }}</textarea>
+          <button type="button" class="mic-button" onclick="startListening()">🎤</button>
+        </div>
+
+        <label for="source_lang">Translate from:</label>
+        <select name="source_lang" id="source_lang">
+          <option value="auto" selected>Auto Detect</option>
+          {% for code, name in languages.items() %}
+          <option value="{{ code }}">{{ name.title() }}</option>
+          {% endfor %}
+        </select>
+
+        <label for="target_lang">Translate to:</label>
+        <select name="target_lang" id="target_lang" required>
+          {% for code, name in languages.items() %}
+          <option value="{{ code }}">{{ name.title() }}</option>
+          {% endfor %}
+        </select>
+
+        <input type="submit" value="Translate ✨">
+      </form>
+    </div>
+
+    <!-- Right Side: Output -->
+    <!-- Right Side: Output + History -->
+{% if translation %}
+<div class="output-section">
+  <h1>Output</h1>
+  <h3>Translated Text:</h3>
+  <p id="translated-text">{{ translation }}</p>
+  <button onclick="speakText()" class="speak-btn">🔊 Speak Output</button>
+
+  {% if history %}
+  <div style="margin-top: 30px; max-height: 200px; overflow-y: auto; border-top: 1px solid #333; padding-top: 15px;">
+    <h3 style="margin-bottom: 10px;">History 📜</h3>
+    {% for item in history|reverse %}
+    <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #444;">
+      <strong>From ({{ item.source }}):</strong>
+      <p>{{ item.original }}</p>
+      <strong>To ({{ item.target }}):</strong>
+      <p>{{ item.translated }}</p>
+    </div>
+    {% endfor %}
+    <form action="/clear-history" method="get">
+      <input type="submit" value="Clear History 🗑️" style="background-color: #ff5c5c; color: white; margin-top: 10px;">
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+
+  </div>
+
+
+  <script>
+    function startListening() {
+      if (!('webkitSpeechRecognition' in window)) {
+        alert("Speech recognition not supported in this browser.");
+        return;
+      }
+
+      const recognition = new webkitSpeechRecognition();
+      recognition.lang = document.getElementById("source_lang").value || 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.start();
+
+      recognition.onresult = function (event) {
+        const spokenText = event.results[0][0].transcript;
+        document.getElementById("text").value = spokenText;
+      };
+
+      recognition.onerror = function (event) {
+        console.error("Speech recognition error:", event.error);
+        alert("Speech recognition error: " + "No speech recognised");
+      };
+    }
+
+    function speakText() {
+      const text = document.getElementById("translated-text").innerText;
+
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = document.getElementById("target_lang").value || 'en';
+        utterance.rate = 1;
+        window.speechSynthesis.speak(utterance);
+      } else {
+        alert("Sorry, your browser does not support text-to-speech.");
+      }
+    }
+  </script>
+</body>
+
+</html>
